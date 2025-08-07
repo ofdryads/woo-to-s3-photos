@@ -1,4 +1,4 @@
-# woo-to-s3-photos
+# Woo-to-S3 Product Photos
 Migrate photos from WooCommerce/WordPress to an AWS S3 bucket to migrate your website off of WordPress, or to have better performance on your current website
 - Download all the product photos for your entire product catalog
 - Convert older/larger image formats to .webp
