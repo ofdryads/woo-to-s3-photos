@@ -10,18 +10,23 @@ from dotenv import load_dotenv
 import boto3
 from botocore.exceptions import ClientError
 
+load_dotenv() 
+
 logging.basicConfig(
     level=logging.INFO,
-    format=LOG_FORMAT,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     filename="migration_log.log",
     filemode="a"
 )
 
-wc_csv = Path(os.getenv("WC_CSV"))
-products_parent = Path(os.getenv("PRODUCTS_PARENT"))
+wc_csv = Path(os.getenv("WC_CSV")) #TODO fix esc char
+products_parent = Path(os.getenv("PRODUCTS_PARENT")) #TODO fix esc char
 extensions = os.getenv("EXTENSIONS", "jpg,jpeg,png").split(",")
+
 bucket = os.getenv("BUCKET_NAME")
+access_key_id=os.getenv('ACCESS_KEY_ID')
+secret_access_key=os.getenv("SECRET_ACCESS_KEY")
 
 def process_csv(wc_csv):
     wc_photo_df = pd.read_csv(wc_csv)
@@ -49,6 +54,7 @@ def download_photos(wc_photos_filtered, products_parent):
                 result = subprocess.run(['wget', url, '-O', str(image)], capture_output=True)
                 if result.returncode == 0 and os.path.getsize(image) > 0:
                     # TODO log to file (f"Successfully downloaded {url} to {image}")
+                    print(f"Successfully downloaded {url} to {image}") #TODO fix logging
                 else:
                     # TODO log to file f"Failed to download {url}: {result.stderr.decode().strip()}")
                     if image.exists():
@@ -94,7 +100,11 @@ def upload_to_s3(products_parent, bucket):
     Upload all the *.webp product photos to the S3 bucket.
     Uses the product name as a metadata tag `x-amz-meta-product`.
     """
-    s3 = boto3.client("s3")
+    s3 = boto3.client(
+    "s3",
+    aws_access_key_id=access_key_id,
+    aws_secret_access_key=secret_access_key
+    )
     products_parent = Path(products_parent)
 
     for product_folder in products_parent.iterdir():
@@ -109,15 +119,18 @@ def upload_to_s3(products_parent, bucket):
                     ExtraArgs={
                             "ContentType": "image/webp",
                             "Metadata": {"product": product_folder.name},
+                            "ACL": "public-read"
                     },
                     )
-                log.info("Uploaded %s to s3://%s/%s", image.name, bucket, object_key)
+                #log.info("Uploaded %s to s3://%s/%s", image.name, bucket, object_key)
             except ClientError as exception:
-                log.error("Failed to upload %s: %s", image, exception)
-                
+                print("Failed to upload %s: %s", image, exception)
+               # log.error("Failed to upload %s: %s", image, exception)
+
     log.info("S3 upload finished.")
 
 df = process_csv(wc_csv)
 download_photos(df, products_parent)
 convert_to_webp(products_parent, extensions)
 upload_to_s3(products_parent, bucket)
+
